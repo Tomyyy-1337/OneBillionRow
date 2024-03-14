@@ -44,14 +44,14 @@ fn main() {
 
     let path = Path::new("measurements.txt");
     let file = File::open(path).expect("failed to open file");
-    let mapped_data = unsafe { Mmap::map(&file) }.unwrap();
-    let raw_data = &*mapped_data;
-    let raw_data = raw_data.strip_suffix(b"\n").unwrap_or(raw_data);
+    let data = unsafe { Mmap::map(&file) }.unwrap();
+    let data = &*data;
+    let data = data.strip_suffix(b"\n").unwrap_or(data);
 
-    let mut data = raw_data
-        .par_split(|&b| b == b'\n')
+    let mut data = data
+        .par_split(|b| *b == b'\n')
         .map(|row| {
-            let mut iter = row.split(|&b| b == b';');
+            let mut iter = row.split(|b| *b == b';');
             let name = iter.next().unwrap();
             let value = std::str::from_utf8(iter.next().unwrap()).unwrap().parse::<f64>().unwrap();
             (name, value)
@@ -74,14 +74,14 @@ fn main() {
             || HashMap::new(),
             |mut map1: HashMap<&[u8], Station>, map2: HashMap<&[u8], Station>| {
                 map2.into_iter().for_each(|(key, other)| 
-                match map1.get_mut(&key) {
-                    Some(station) => {
-                        station.combine(other);
-                    },
-                    None => {
-                        map1.insert_unique_unchecked(key, other);
-                    }
-                });
+                    match map1.get_mut(&key) {
+                        Some(station) => {
+                            station.combine(other);
+                        },
+                        None => {
+                            map1.insert_unique_unchecked(key, other);
+                        }
+                    });
                 map1
             }
         )
@@ -94,8 +94,8 @@ fn main() {
 
     data.sort_unstable_by_key(|(name, _, _, _)| *name);
 
-    let mut output = data.iter().map(|(name, min, avg, max)| {
-        format!("{}:{:.1}/{:.1}/{:.1};", std::str::from_utf8(name).unwrap(), min, avg, max)
+    let mut output = data.into_iter().map(|(name, min, avg, max)| {
+        format!("{}={:.1}/{:.1}/{:.1};", std::str::from_utf8(name).unwrap(), min, avg, max)
     }).collect::<String>();
     output.pop();
     let output = format!("{{{}}}", output);   

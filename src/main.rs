@@ -52,13 +52,13 @@ fn main() {
         .par_split(|&b| b == b'\n')
         .map(|row| {
             let mut iter = row.split(|&b| b == b';');
-            let name = std::str::from_utf8(iter.next().unwrap()).unwrap();
+            let name = iter.next().unwrap();
             let value = std::str::from_utf8(iter.next().unwrap()).unwrap().parse::<f64>().unwrap();
             (name, value)
         })
         .fold( 
             || HashMap::new(),
-            |mut station_map: HashMap<&str, Station>, (name, value)| {
+            |mut station_map: HashMap<&[u8], Station>, (name, value)| {
                 match station_map.get_mut(name) {
                     Some(station) => {
                         station.upate(value);
@@ -72,7 +72,7 @@ fn main() {
         )
         .reduce(
             || HashMap::new(),
-            |mut map1: HashMap<&str, Station>, map2: HashMap<&str, Station>| {
+            |mut map1: HashMap<&[u8], Station>, map2: HashMap<&[u8], Station>| {
                 map2.into_iter().for_each(|(key, other)| 
                 match map1.get_mut(&key) {
                     Some(station) => {
@@ -92,14 +92,13 @@ fn main() {
         })
         .collect::<Vec<_>>();
 
-    data.sort_unstable_by_key(|(name, _, _, _)| name.to_string());
+    data.sort_unstable_by_key(|(name, _, _, _)| *name);
 
     let mut output = data.iter().map(|(name, min, avg, max)| {
-        format!("{}:{:.1}/{:.1}/{:.1};", name, min, avg, max)
+        format!("{}:{:.1}/{:.1}/{:.1};", std::str::from_utf8(name).unwrap(), min, avg, max)
     }).collect::<String>();
     output.pop();
     let output = format!("{{{}}}", output);   
-
 
     println!("{}", output);
     println!("Elapsed time: {:?}", start.elapsed());

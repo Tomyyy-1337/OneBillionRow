@@ -1,5 +1,6 @@
 use std::{
-    fs::File, path::Path
+    fs::File, 
+    path::Path
 };
 use hashbrown::HashMap;
 use memmap2::Mmap;
@@ -36,6 +37,26 @@ impl Station {
         self.sum += other.sum;
         self.count += other.count;
     }
+
+    fn to_string(&self) -> String {
+        format!("{:.1}/{:.1}/{:.1}", self.min, self.sum / self.count as f64, self.max)
+    }
+}
+
+fn fast_parse_f64(input: &[u8]) -> f64 {
+    if input[0] == b'-' {
+        return -fast_parse_f64(&input[1..]);
+    }
+    let mut iter = input.split(|b| *b == b'.');
+    let integer = iter.next().unwrap();
+    let decimal = iter.next().unwrap();
+    let result_integer = fast_parse_u8(integer) as f64;
+    let result_decimal  = fast_parse_u8(decimal) as f64;
+    result_integer + result_decimal / 10_f64.powi(decimal.len() as i32)
+}
+
+fn fast_parse_u8(input: &[u8]) -> u8 {
+    input.iter().fold(0, |acc, &digit| acc * 10 + (digit - b'0'))
 }
 
 fn main() {
@@ -52,25 +73,20 @@ fn main() {
     let chunk_size = data.len() / chunk_count;
 
     let mut data = (0..chunk_count)
-        .scan(0, |start_indx, _| {
+        .scan(0, |start_indx: &mut usize, _| {
             let end = (*start_indx + chunk_size).min(data.len());
-            let next_new_line = match memchr::memchr(b'\n', &data[end..]) {
-                Some(v) => v,
-                None => 0,
-            };
-            let end = end + next_new_line;
+            let end = end + memchr::memchr(b'\n', &data[end..]).unwrap_or(0);
             let chunk = (*start_indx, end);
             *start_indx = end + 1;
             Some(chunk)
         })
-        .collect::<Vec<_>>()
-        .into_par_iter()
+        .par_bridge()
         .map(|(start , end)| { data[start..end]
             .split(|b| b == &b'\n')
             .map(|row| {
                 let mut iter = row.split(|b| *b == b';');
                 let name = iter.next().unwrap();
-                let value = std::str::from_utf8(iter.next().unwrap()).unwrap().parse::<f64>().unwrap();
+                let value = fast_parse_f64(iter.next().unwrap());
                 (name, value)
             })
             .fold(
@@ -105,16 +121,12 @@ fn main() {
             }
         )
         .into_iter()
-        .map(|(key, value)| {
-            let avg = value.sum / value.count as f64;
-            (key, value.min, avg, value.max)
-        })
         .collect::<Vec<_>>();
 
-    data.sort_unstable_by_key(|(name, _, _, _)| *name);
+    data.sort_unstable_by_key(|(name,_)| *name);
 
-    let mut output = data.into_iter().map(|(name, min, avg, max)| {
-        format!("{}={:.1}/{:.1}/{:.1};", std::str::from_utf8(name).unwrap(), min, avg, max)
+    let mut output = data.into_iter().map(|(name, station)| {
+        format!("{}={};", std::str::from_utf8(name).unwrap(), station.to_string())
     }).collect::<String>();
     output.pop();
     let output = format!("{{{}}}", output);   

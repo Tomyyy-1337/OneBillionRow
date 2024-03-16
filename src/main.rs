@@ -1,6 +1,5 @@
 use std::{
-    fs::File, 
-    path::Path,
+    fs::File, path::Path
 };
 use hashbrown::HashMap;
 use memmap2::Mmap;
@@ -48,28 +47,48 @@ fn main() {
     let data = &*data;
     let data = data.strip_suffix(b"\n").unwrap_or(data);
 
-    let mut data = data
-        .par_split(|b| *b == b'\n')
-        .map(|row| {
-            let mut iter = row.split(|b| *b == b';');
-            let name = iter.next().unwrap();
-            let value = std::str::from_utf8(iter.next().unwrap()).unwrap().parse::<f64>().unwrap();
-            (name, value)
+    let mut chunk_count: usize = std::thread::available_parallelism().unwrap().into();
+    chunk_count *= 12;
+    let chunk_size = data.len() / chunk_count;
+
+    let mut data = (0..chunk_count)
+        .scan(0, |start_indx, _| {
+            let end = (*start_indx + chunk_size).min(data.len());
+            let next_new_line = match memchr::memchr(b'\n', &data[end..]) {
+                Some(v) => v,
+                None => 0,
+            };
+            let end = end + next_new_line;
+            let chunk = (*start_indx, end);
+            *start_indx = end + 1;
+            Some(chunk)
         })
-        .fold( 
-            || HashMap::new(),
-            |mut station_map: HashMap<&[u8], Station>, (name, value)| {
-                match station_map.get_mut(name) {
-                    Some(station) => {
-                        station.upate(value);
+        .collect::<Vec<_>>()
+        .into_par_iter()
+        .map(|(start , end)| { data[start..end]
+            .split(|b| b == &b'\n')
+            .map(|row| {
+                let mut iter = row.split(|b| *b == b';');
+                let name = iter.next().unwrap();
+                let value = std::str::from_utf8(iter.next().unwrap()).unwrap().parse::<f64>().unwrap();
+                (name, value)
+            })
+            .fold(
+                HashMap::new(),
+                |mut station_map: HashMap<&[u8], Station>, (name, value)| 
+                {
+                    match station_map.get_mut(name) {
+                        Some(station) => {
+                            station.upate(value);
+                        }
+                        None => {
+                            station_map.insert_unique_unchecked(name, Station::new(value));
+                        }
                     }
-                    None => {
-                        station_map.insert_unique_unchecked(name, Station::new(value));
-                    }
+                    station_map
                 }
-                station_map
-            }
-        )
+            )
+        })      
         .reduce(
             || HashMap::new(),
             |mut map1: HashMap<&[u8], Station>, map2: HashMap<&[u8], Station>| {

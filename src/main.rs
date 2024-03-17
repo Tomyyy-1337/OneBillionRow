@@ -50,7 +50,7 @@ fn fast_parse_f64(input: &[u8]) -> f64 {
     let decimal_point_indx = input.iter().position(|&b| b == b'.').unwrap();
     let integer = &input[..decimal_point_indx];
     let result_integer = integer.iter().fold(0, |acc, &b| acc * 10 + (b - b'0')) as f64;
-    let result_decimal  = (*input.last().unwrap() - b'0') as f64;  
+    let result_decimal  = (input[decimal_point_indx+1] - b'0') as f64;  
     result_integer + result_decimal / 10.0
 }
 
@@ -70,7 +70,7 @@ fn main() {
     let mut data = (0..chunk_count)
         .scan(0, |start_indx: &mut usize, _| {
             let end = (*start_indx + chunk_size).min(data.len());
-            let end = end + memchr::memchr(b'\n', &data[end..]).unwrap_or(0);
+            let end = end + &data[end..].iter().position(|c| c == &b'\n').unwrap_or(0);
             let chunk = (*start_indx, end);
             *start_indx = end + 1;
             Some(chunk)

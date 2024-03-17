@@ -47,16 +47,11 @@ fn fast_parse_f64(input: &[u8]) -> f64 {
     if input[0] == b'-' {
         return -fast_parse_f64(&input[1..]);
     }
-    let mut iter = input.split(|b| *b == b'.');
-    let integer = iter.next().unwrap();
-    let decimal = iter.next().unwrap();
-    let result_integer = fast_parse_u8(integer) as f64;
-    let result_decimal  = fast_parse_u8(decimal) as f64;
-    result_integer + result_decimal / 10_f64.powi(decimal.len() as i32)
-}
-
-fn fast_parse_u8(input: &[u8]) -> u8 {
-    input.iter().fold(0, |acc, &digit| acc * 10 + (digit - b'0'))
+    let decimal_point_indx = input.iter().position(|&b| b == b'.').unwrap();
+    let integer = &input[..decimal_point_indx];
+    let result_integer = integer.iter().fold(0, |acc, &b| acc * 10 + (b - b'0')) as f64;
+    let result_decimal  = (*input.last().unwrap() - b'0') as f64;  
+    result_integer + result_decimal / 10.0
 }
 
 fn main() {
@@ -69,7 +64,7 @@ fn main() {
     let data = data.strip_suffix(b"\n").unwrap_or(data);
 
     let mut chunk_count: usize = std::thread::available_parallelism().unwrap().into();
-    chunk_count *= 12;
+    chunk_count *= 20;
     let chunk_size = data.len() / chunk_count;
 
     let mut data = (0..chunk_count)
@@ -81,8 +76,8 @@ fn main() {
             Some(chunk)
         })
         .par_bridge()
-        .map(|(start , end)| { data[start..end]
-            .split(|b| b == &b'\n')
+        .map(|(start , end)| data[start..end]
+            .split(|&b| b == b'\n')
             .map(|row| {
                 let mut iter = row.split(|b| *b == b';');
                 let name = iter.next().unwrap();
@@ -104,20 +99,21 @@ fn main() {
                     station_map
                 }
             )
-        })      
+        )      
         .reduce(
             || HashMap::new(),
-            |mut map1: HashMap<&[u8], Station>, map2: HashMap<&[u8], Station>| {
-                map2.into_iter().for_each(|(key, other)| 
-                    match map1.get_mut(&key) {
+            |map1: HashMap<&[u8], Station>, mut map2: HashMap<&[u8], Station>| {
+                for (key, other) in map1 {
+                    match map2.get_mut(&key) {
                         Some(station) => {
                             station.combine(other);
                         },
                         None => {
-                            map1.insert_unique_unchecked(key, other);
+                            map2.insert_unique_unchecked(key, other);
                         }
-                    });
-                map1
+                    }
+                }
+                map2
             }
         )
         .into_iter()

@@ -48,8 +48,7 @@ fn fast_parse_f64(input: &[u8]) -> f64 {
         return -fast_parse_f64(&input[1..]);
     }
     let decimal_point_indx = input.iter().position(|&b| b == b'.').unwrap();
-    let integer = &input[..decimal_point_indx];
-    let result_integer = integer.iter().fold(0, |acc, &b| acc * 10 + (b - b'0')) as f64;
+    let result_integer = input[..decimal_point_indx].into_iter().fold(0, |acc, &b| acc * 10 + (b - b'0')) as f64;
     let result_decimal  = (input[decimal_point_indx+1] - b'0') as f64;  
     result_integer + result_decimal / 10.0
 }
@@ -67,21 +66,21 @@ fn main() {
     chunk_count *= 20;
     let chunk_size = data.len() / chunk_count;
 
-    let mut data = (0..chunk_count)
+    let mut data: Vec<(&[u8], Station)> = (0..chunk_count)
         .scan(0, |start_indx: &mut usize, _| {
             let end = (*start_indx + chunk_size).min(data.len());
-            let end = end + &data[end..].iter().position(|c| c == &b'\n').unwrap_or(0);
+            let end = end + &data[end..].iter().position(|c| *c == b'\n').unwrap_or(0);
             let chunk = (*start_indx, end);
             *start_indx = end + 1;
             Some(chunk)
         })
         .par_bridge()
         .map(|(start , end)| data[start..end]
-            .split(|&b| b == b'\n')
+            .split(|b| *b == b'\n')
             .map(|row| {
-                let mut iter = row.split(|b| *b == b';');
-                let name = iter.next().unwrap();
-                let value = fast_parse_f64(iter.next().unwrap());
+                let split_pos = row.iter().position(|b| *b == b';').unwrap_or(0);
+                let name = &row[..split_pos];
+                let value = fast_parse_f64(&row[split_pos+1..]);
                 (name, value)
             })
             .fold(
@@ -117,7 +116,7 @@ fn main() {
             }
         )
         .into_iter()
-        .collect::<Vec<_>>();
+        .collect();
 
     data.sort_unstable_by_key(|(name,_)| *name);
 

@@ -6,28 +6,27 @@ use hashbrown::HashMap;
 use memmap2::Mmap;
 use rayon::prelude::*;
 
-#[derive(Debug, Copy, Clone)]
 struct Station {
-    min: f64,
-    max: f64,
-    sum: f64,
-    count: u64,
+    min: i16,
+    max: i16,
+    sum: i32,
+    count: u32,
 }
 
 impl Station {
-    fn new(value: f64) -> Self {
+    fn new(value: i16) -> Self {
         Self {
             min: value,
             max: value,
-            sum: value,
+            sum: value as i32,
             count: 1,
         }
     }
 
-    fn upate(&mut self, value: f64) {
+    fn upate(&mut self, value: i16) {
         self.min = self.min.min(value);
         self.max = self.max.max(value);
-        self.sum += value;
+        self.sum += value as i32;
         self.count += 1;
     }
 
@@ -39,18 +38,18 @@ impl Station {
     }
 
     fn to_string(&self) -> String {
-        format!("{:.1}/{:.1}/{:.1}", self.min, self.sum / self.count as f64, self.max)
+        format!("{:.1}/{:.1}/{:.1}", self.min as f64 / 10.0, self.sum as f64 / self.count as f64 / 10.0, self.max as f64 / 10.0)
     }
 }
 
-fn fast_parse_f64(input: &[u8]) -> f64 {
+fn fast_parse(input: &[u8]) -> i16 {
     if input[0] == b'-' {
-        return -fast_parse_f64(&input[1..]);
+        return -fast_parse(&input[1..]);
     }
     let decimal_point_indx = input.iter().position(|&b| b == b'.').unwrap();
-    let result_integer = input[..decimal_point_indx].into_iter().fold(0, |acc, &b| acc * 10 + (b - b'0')) as f64;
-    let result_decimal  = (input[decimal_point_indx+1] - b'0') as f64;  
-    result_integer + result_decimal / 10.0
+    let result_integer = input[..decimal_point_indx].into_iter().fold(0, |acc, &b| acc * 10 + (b - b'0')) as i16 * 10;
+    let result_decimal  = (input[decimal_point_indx+1] - b'0') as i16;  
+    result_integer + result_decimal
 }
 
 fn main() {
@@ -80,7 +79,7 @@ fn main() {
             .map(|row| {
                 let split_pos = row.iter().position(|b| *b == b';').unwrap_or(0);
                 let name = &row[..split_pos];
-                let value = fast_parse_f64(&row[split_pos+1..]);
+                let value = fast_parse(&row[split_pos+1..]);
                 (name, value)
             })
             .fold(
@@ -102,7 +101,7 @@ fn main() {
         .reduce(
             || HashMap::new(),
             |map1: HashMap<&[u8], Station>, mut map2: HashMap<&[u8], Station>| {
-                for (key, other) in map1 {
+                for (key, other) in map1.into_iter() {
                     match map2.get_mut(&key) {
                         Some(station) => {
                             station.combine(other);

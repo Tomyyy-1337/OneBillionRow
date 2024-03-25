@@ -10,5 +10,5 @@ edition = "2021"
 
 [dependencies]
 memmap2 = "0.9.4"
-rayon = "1.9.0"
+rayon = "1.10.0"
 hashbrown = "0.14.3"
